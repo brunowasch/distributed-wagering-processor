@@ -1,22 +1,34 @@
 import { Module } from '@nestjs/common';
-import { createObserveModule } from '@nestjs/observe';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
-
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { PostgreSqlDriver } from '@mikro-orm/postgresql';
+import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 
 @Module({
   imports: [
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com,
-    // then run `npx @nestjs/observe link` to write your key pair into .env.
-    ObserveModule.forRoot({
-      appKey: process.env.OBSERVE_APP_KEY ?? 'YOUR_APP_KEY',
-      appSecret: process.env.OBSERVE_APP_SECRET ?? 'YOUR_APP_SECRET',
-      serviceId: 'distributed-wagering-processor',
+    // Carrega .env de forma global
+    ConfigModule.forRoot({
+      isGlobal: true, 
+    }),
+
+    // Integra o MikroORM ao NestJS
+    MikroOrmModule.forRootAsync({
+      driver: PostgreSqlDriver, // Declara o driver para a configuração assíncrona.
+      inject: [ConfigService],
+      useFactory: (configService : ConfigService) => ({
+        driver: PostgreSqlDriver,
+        host: configService.get<string>('DATABASE_HOST'),
+        port: Number(configService.get<string>('DATABASE_PORT')),
+        dbName: configService.get<string>('DATABASE_NAME'),
+        user: configService.get<string>('DATABASE_USER'),
+        password: configService.get<string>('DATABASE_PASSWORD'),
+        autoLoadEntities: true, // Registra auomaticamente as entidades adicionadas aos módulos
+        metadataProvider: ReflectMetadataProvider,
+        discovery: {
+          warnWhenNoEntities: false,
+        },
+      }),
     }),
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
