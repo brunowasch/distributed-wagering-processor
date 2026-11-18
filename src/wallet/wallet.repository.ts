@@ -8,9 +8,15 @@ import { WalletMapper } from './mappers/wallet.mapper.js';
 export class WalletRepository {
     constructor(private readonly em: EntityManager) {}
 
-    // Busca a carteira usando o EntityManager padrão ou o de uma transação.
+    // Busca a carteira utilizando o EntityManager padrão ou o transacional.
     async findById(id: string, em: EntityManager = this.em): Promise<Wallet | null> {
         const entity = await em.findOne(WalletEntity, { id });
         return entity ? WalletMapper.toDomain(entity) : null;
+    }
+
+    // Registra uma nova carteira sem executar o commit da transação.
+    async create(wallet: Wallet, em: EntityManager = this.em): Promise<void> {
+        const entity = WalletMapper.toEntity(wallet);
+        em.persist(entity);
     }
 }
