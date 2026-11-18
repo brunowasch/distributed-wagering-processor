@@ -6,14 +6,11 @@ import { WagerTransactionMapper } from './mappers/wager-transaction.mapper.js';
 
 @Injectable()
 export class WagerTransactionRepository {
-    constructor(
-        private readonly em: EntityManager,
-    ) {}
+    constructor(private readonly em: EntityManager) {}
 
-    // Busca uma transação pelo identificador interno.
-    async findById(id: string): Promise<WagerTransaction | null> {
-        const entity = await this.em.findOne(WagerTransactionEntity, { id });
-
+    // Permite executar consultas usando o EntityManager padrão ou um transacional.
+    async findById(id: string, em: EntityManager = this.em): Promise<WagerTransaction | null> {
+        const entity = await em.findOne(WagerTransactionEntity, { id });
         return entity ? WagerTransactionMapper.toDomain(entity) : null;
     }
 
@@ -21,8 +18,9 @@ export class WagerTransactionRepository {
     async findByProviderAndExternalId(
         providerId: string,
         externalTransactionId: string,
+        em: EntityManager = this.em,
     ): Promise<WagerTransaction | null> {
-        const entity = await this.em.findOne(WagerTransactionEntity, {
+        const entity = await em.findOne(WagerTransactionEntity, {
             providerId,
             externalTransactionId,
         });
@@ -31,28 +29,27 @@ export class WagerTransactionRepository {
     }
 
     // Busca uma transação pela chave utilizada para garantir idempotência.
-    async findByIdempotencyKey(idempotencyKey: string): Promise<WagerTransaction | null> {
-        const entity = await this.em.findOne(WagerTransactionEntity, {
-            idempotencyKey,
-        });
-
+    async findByIdempotencyKey(
+        idempotencyKey: string,
+        em: EntityManager = this.em,
+    ): Promise<WagerTransaction | null> {
+        const entity = await em.findOne(WagerTransactionEntity, { idempotencyKey });
         return entity ? WagerTransactionMapper.toDomain(entity) : null;
     }
 
-    // Persiste uma nova transação sem executar o commit da transação SQL.
-    async create(transaction: WagerTransaction): Promise<void> {
+    // Registra uma nova transação sem executar o commit.
+    async create(transaction: WagerTransaction, em: EntityManager = this.em): Promise<void> {
         const entity = WagerTransactionMapper.toEntity(transaction);
-
-        this.em.persist(entity);
+        em.persist(entity);
     }
 
-    // Atualiza uma transação já persistida.
-    async update(transaction: WagerTransaction): Promise<void> {
-        const entity = await this.em.findOneOrFail(WagerTransactionEntity, {
+    // Atualiza somente os campos mutáveis da transação persistida.
+    async update(transaction: WagerTransaction, em: EntityManager = this.em): Promise<void> {
+        const entity = await em.findOneOrFail(WagerTransactionEntity, {
             id: transaction.id,
         });
 
-        this.em.assign(entity, {
+        em.assign(entity, {
             status: transaction.status,
             referenceTransactionId: transaction.referenceTransactionId ?? null,
             failureCode: transaction.failureCode ?? null,

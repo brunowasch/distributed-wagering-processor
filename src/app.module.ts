@@ -4,6 +4,8 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { PostgreSqlDriver } from '@mikro-orm/postgresql';
 import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 import { WageringModule } from './wagering/wagering.module.js';
+import { WalletModule } from './wallet/wallet.module.js';
+import { DatabaseModule } from './shared/infrastructure/database/database.module.js';
 
 @Module({
   imports: [
@@ -30,8 +32,10 @@ import { WageringModule } from './wagering/wagering.module.js';
         },
       }),
     }),
-    
+  
     WageringModule,
+    WalletModule,
+    DatabaseModule,
 
   ],
 })

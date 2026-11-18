@@ -6,14 +6,11 @@ import { WalletMapper } from './mappers/wallet.mapper.js';
 
 @Injectable()
 export class WalletRepository {
-    constructor(
-        private readonly em: EntityManager,
-    ) {}
+    constructor(private readonly em: EntityManager) {}
 
-    // Busca a entidade persistida e reconstrói o agregado de domínio.
-    async findById(id: string): Promise<Wallet | null> {
-        const entity = await this.em.findOne(WalletEntity, { id });
-
+    // Busca a carteira usando o EntityManager padrão ou o de uma transação.
+    async findById(id: string, em: EntityManager = this.em): Promise<Wallet | null> {
+        const entity = await em.findOne(WalletEntity, { id });
         return entity ? WalletMapper.toDomain(entity) : null;
     }
 }
