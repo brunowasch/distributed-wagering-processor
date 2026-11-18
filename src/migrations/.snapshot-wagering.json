@@ -42,6 +42,23 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 3,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
         "id": {
           "name": "id",
           "type": "uuid",
@@ -58,6 +75,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
         },
         "updated_at": {
           "name": "updated_at",
@@ -103,6 +137,17 @@
           "constraint": true,
           "keyName": "wallet_pkey",
           "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "player_id",
+            "currency"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "wallet_player_id_currency_unique",
+          "primary": false,
           "unique": true
         }
       ],

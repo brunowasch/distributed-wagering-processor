@@ -1,58 +1,112 @@
 import { Decimal } from 'decimal.js';
+import { isValidCurrency } from './currency.js';
+
+export interface MoneyProps {
+  amount: string; // Representa o valor monetário como uma string para evitar problemas de precisão.
+  currency: string; // Representa a moeda associada ao valor monetário.
+}
 
 export class Money {
-    // Mantém o valor imutável para evitar alterações após a criação.
-    private readonly amount: Decimal;
+    private static readonly MAX_AMOUNT = new Decimal('999999999999999999.99');
 
-    // Construtor privado para forçar a criação via factory method.
-    private constructor(value: string) {
-        // Regex para aceitar somente valores decimais não negativos comk até duas casas.
-        if (!/^\d+(\.\d{1,2})?$/.test(value)) {
-            throw new Error('Invalid monetary value.');
-        }
-        
-        // Converte para Decimal para garantir precisão matemática e evitar erros de arredondamento.
-        this.amount = new Decimal(value);
+    private constructor(
+        private readonly amount: Decimal,
+        private readonly currency: string,
+    ) {}
 
-        // NUMERIC(20,2) permite até 18 dígitos antes da parte decimal.
-        if (this.amount.greaterThan('999999999999999999.99')) {
-            throw new Error('Monetary value exceeds the maximum allowed.');
+    static from(props: MoneyProps): Money {
+        const { amount, currency } = props;
+
+        // Regex para impedir valores vazios, notação científica e mais de duas casas decimais.
+        if (!/^-?\d+(\.\d{1,2})?$/.test(amount)) {
+            throw new Error('Invalid monetary amount.');
         }
+
+        const decimalAmount = new Decimal(amount);
+
+        // Mantém o valor dentro da precisão suportada pelo numeric(20,2).
+        if (decimalAmount.abs().greaterThan(Money.MAX_AMOUNT)) {
+            throw new Error('Monetary amount exceeds the maximum allowed value.');
+        }
+
+        // Valida se a moeda é suportada pelo sistema.
+        if (!isValidCurrency(currency)) {
+            throw new Error('Invalid currency.');
+        }
+
+        return new Money(decimalAmount, currency);
     }
 
-    // Factory Method: centraliza a criação de valores monetários.
-    static from(value: string): Money {
-        return new Money(value)
+    getCurrency(): string {
+        return this.currency;
     }
 
-    // Retorna uma nova instância, preservando a imutabilidade.
+    static zero(currency: string): Money {
+        return Money.from({
+            amount: '0.00',
+            currency,
+        });
+    }
+
     add(other: Money): Money {
-        return Money.from(this.amount.plus(other.amount).toFixed(2));
+        this.assertSameCurrency(other);
+
+        return new Money(this.amount.plus(other.amount), this.currency);
     }
 
-    // Subtrai o valor atual com o valor passado como parâmetro.
     subtract(other: Money): Money {
-        const result = this.amount.minus(other.amount);
+        this.assertSameCurrency(other);
 
-        // Impede que uma operação produza saldo negativo.
-        if (result.isNegative()) {
-            throw new Error('Insufficient funds.');
-        }
-
-        return Money.from(result.toFixed(2));
+        return new Money(this.amount.minus(other.amount), this.currency);
     }
 
-    // Compara se o valor atual é maior ou igual ao valor passado como parâmetro.
+    negate(): Money {
+        return new Money(this.amount.negated(), this.currency);
+    }
+
+    isZero(): boolean {
+        return this.amount.isZero();
+    }
+
+    isPositive(): boolean {
+        return this.amount.greaterThan(0);
+    }
+
+    isNegative(): boolean {
+        return this.amount.isNegative();
+    }
+
+    isLessThan(other: Money): boolean {
+        this.assertSameCurrency(other);
+
+        return this.amount.lessThan(other.amount);
+    }
+
     isGreaterThanOrEqual(other: Money): boolean {
+        this.assertSameCurrency(other);
+
         return this.amount.greaterThanOrEqualTo(other.amount);
     }
 
-    // Confere se os valores são iguais.
     equals(other: Money): boolean {
-        return this.amount.equals(other.amount);
+        return this.currency === other.currency && this.amount.equals(other.amount);
     }
 
-    // Normaliza o valor para String.
+    assertSameCurrency(other: Money): void {
+        if (this.currency !== other.currency) {
+            throw new Error(
+                `Currency mismatch: ${this.currency} and ${other.currency}.`,
+            );
+        }
+    }
+
+    toJSON(): MoneyProps {
+        return {
+            amount: this.amount.toFixed(2),
+            currency: this.currency,
+        };
+    }
+
     toString(): string {
         return this.amount.toFixed(2);
     }
