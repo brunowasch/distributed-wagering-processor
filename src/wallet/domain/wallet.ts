@@ -1,12 +1,36 @@
 import { randomUUID } from 'node:crypto';
 import { Money } from '../../shared/domain/money.js';
 
+/**
+ * Parâmetros necessários para a criação ou inicialização de uma carteira.
+ *
+ * id: identificador único opcional da carteira (gerado automaticamente se não informado).
+ * playerId: identificador do jogador que será o proprietário da carteira.
+ * initialBalance: objeto de valor (Money) contendo o saldo e a moeda iniciais.
+ *
+ * O campo initialBalance define a moeda padrão da carteira,
+ * que não poderá ser alterada após a criação.
+ */
 export interface WalletProps {
     id?: string;
     playerId: string;
     initialBalance: Money;
 }
 
+/**
+ * Estado completo e atual da entidade de carteira no domínio.
+ *
+ * id: identificador único da carteira.
+ * playerId: identificador do jogador proprietário da carteira.
+ * currency: código da moeda associada à carteira (ex: BRL, USD).
+ * balance: objeto de valor (Money) que representa o saldo atual disponível.
+ * version: controle de versão da entidade para evitar conflitos em atualizações simultâneas.
+ * createdAt: data e hora em que a carteira foi criada.
+ * updatedAt: data e hora da última atualização realizada na carteira.
+ *
+ * Os campos createdAt, updatedAt e version são gerenciados internamente
+ * pelo ciclo de vida da entidade e refletem seu estado persistido.
+ */
 export interface WalletState {
     id: string;
     playerId: string;

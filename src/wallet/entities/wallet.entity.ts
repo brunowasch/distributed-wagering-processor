@@ -1,5 +1,17 @@
 import { Entity, PrimaryKey, Property, Unique } from '@mikro-orm/decorators/legacy';
 
+/**
+ * Propriedades que representam a estrutura e o estado da carteira.
+ *
+ * id: identificador único da carteira.
+ * playerId: identificador do jogador proprietário da carteira.
+ * currency: código da moeda utilizada na carteira (ex: BRL, USD).
+ * balance: saldo atual disponível na carteira, representado em texto para manter a precisão decimal.
+ * version: controle de versão da entidade para evitar conflitos em atualizações simultâneas.
+ *
+ * O campo version deve ser incrementado a cada alteração de saldo
+ * para garantir a integridade dos dados (Optimistic Locking).
+ */
 export interface WalletEntityProps {
     id: string;
     playerId: string;

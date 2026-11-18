@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { PostgreSqlDriver } from '@mikro-orm/postgresql';
 import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
+import { WageringModule } from './wagering/wagering.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,9 @@ import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
         },
       }),
     }),
+    
+    WageringModule,
+
   ],
 })
 export class AppModule {}

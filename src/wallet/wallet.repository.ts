@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { InjectEntityManager } from '@mikro-orm/nestjs';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Wallet } from './domain/wallet.js';
 import { WalletEntity } from './entities/wallet.entity.js';
@@ -8,7 +7,6 @@ import { WalletMapper } from './mappers/wallet.mapper.js';
 @Injectable()
 export class WalletRepository {
     constructor(
-        @InjectEntityManager('default')
         private readonly em: EntityManager,
     ) {}
 

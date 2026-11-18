@@ -2,6 +2,10 @@ import { Money } from '../../shared/domain/money.js';
 import { Wallet } from '../domain/wallet.js';
 import { WalletEntity } from '../entities/wallet.entity.js';
 
+/**
+ * Responsável pela conversão entre o agregado de domínio (Wallet)
+ * e a entidade de persistência (WalletEntity).
+ */
 export class WalletMapper {
     // Converte o agregado de domínio para a representação persistida.
     static toEntity(wallet: Wallet): WalletEntity {
