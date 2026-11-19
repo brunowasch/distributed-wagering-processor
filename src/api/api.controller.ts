@@ -183,11 +183,13 @@ export class WageringController {
                 }),
         });
         if (result.status === 'REJECTED') response.status(422);
+        else if (result.status === 'FAILED') response.status(500);
         else if (result.status === 'PENDING_REFERENCE') response.status(202);
         else if (result.idempotentReplay) response.status(200);
         return {
             transactionId: result.transactionId,
             status: result.status,
+            ...(result.failureCode ? { failureCode: result.failureCode } : {}),
             balance: result.balance.toJSON(),
             idempotentReplay: result.idempotentReplay,
         };

@@ -4,6 +4,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { AppModule } from '../../../src/app.module.js';
 import { Money } from '../../../src/shared/domain/money.js';
 import { Wallet } from '../../../src/wallet/domain/wallet.js';
+import { WagerTransactionEntity } from '../../../src/wagering/entities/wager-transaction.entity.js';
 import { WalletApplicationService } from '../../../src/wallet/wallet-application.service.js';
 import { WalletRepository } from '../../../src/wallet/wallet.repository.js';
 
@@ -40,5 +41,23 @@ describe('Wallet reconciliation (PostgreSQL integration)', () => {
         expect(result.consistent).toBe(false);
         expect(result.checkedEntries).toBe(0);
         expect(result.checkedTransactions).toBe(0);
+    });
+
+    it('reports a ledger whose amount no longer matches its processed transaction', async () => {
+        const wallet = await application.openWallet({
+            playerId: `reconciliation-player-${randomUUID()}`,
+            initialBalance: Money.from({ amount: '40.00', currency: 'BRL' }),
+        });
+        const writer = em.fork();
+        const opening = await writer.findOneOrFail(WagerTransactionEntity, { walletId: wallet.id });
+        await writer.nativeUpdate(WagerTransactionEntity, { id: opening.id }, { amount: '41.00' });
+
+        const result = await application.reconcile(wallet.id);
+
+        expect(result.storedBalance.toString()).toBe('40.00');
+        expect(result.calculatedBalance.toString()).toBe('40.00');
+        expect(result.consistent).toBe(false);
+        expect(result.checkedEntries).toBe(1);
+        expect(result.checkedTransactions).toBe(1);
     });
 });

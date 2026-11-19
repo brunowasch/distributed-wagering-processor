@@ -21,10 +21,15 @@ describe.skipIf(!localstackAvailable)('SQS (LocalStack integration)', () => {
         await client.createFifoQueue(queueName);
         try {
             await client.sendMessage(queueName, payload, randomUUID(), eventId);
+            expect(await client.getApproximateMessageCount(queueName)).toBe(1);
             const received = await client.receiveMessages(queueName, 10, 2);
             const message = received.find(({ body }) => body === payload);
             expect(message).toBeDefined();
-            await client.deleteMessage(queueName, message!.receiptHandle);
+            await client.changeMessageVisibility(queueName, message!.receiptHandle, 0);
+            const redelivered = await client.receiveMessages(queueName, 10, 2);
+            expect(redelivered.some(({ body }) => body === payload)).toBe(true);
+            const redeliveredMessage = redelivered.find(({ body }) => body === payload)!;
+            await client.deleteMessage(queueName, redeliveredMessage.receiptHandle);
         } finally {
             await client.deleteQueue(queueName);
         }

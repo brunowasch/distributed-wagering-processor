@@ -12,6 +12,11 @@ import { WalletRepository } from '../wallet/wallet.repository.js';
 import { WalletLedgerEntryRepository } from '../wallet/repositories/wallet-ledger-entry.repository.js';
 import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from './domain/wager-transaction.js';
 import { WagerTransactionRepository } from './wager-transaction.repository.js';
+import {
+    isPermanentInfrastructureFailure,
+    PermanentWageringProcessingError,
+    PERMANENT_INFRASTRUCTURE_FAILURE,
+} from './permanent-processing-failure.js';
 
 /** Quantidade máxima de consultas persistidas antes de rejeitar referência ausente. */
 const MAX_REFERENCE_ATTEMPTS = 12;
@@ -46,6 +51,8 @@ export interface ProcessWagerTransactionResult {
     transactionId: string;
     /** Estado alcançado ou preservado pela operação. */
     status: WagerTransactionStatus;
+    /** Código estável para o provedor interpretar uma rejeição de negócio. */
+    failureCode?: string;
     /** Saldo observado e persistido para reproduzir respostas em replay. */
     balance: Money;
     /** Indica se a resposta foi recuperada de uma operação já registrada. */
@@ -127,6 +134,7 @@ export class WageringService {
                 return {
                     transactionId: transaction.id,
                     status: transaction.status,
+                    ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                     balance: wallet.balance,
                     idempotentReplay: false,
                 };
@@ -162,6 +170,7 @@ export class WageringService {
                     return {
                         transactionId: transaction.id,
                         status: transaction.status,
+                        ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                         balance: wallet.balance,
                         idempotentReplay: false,
                     };
@@ -177,6 +186,7 @@ export class WageringService {
                     return {
                         transactionId: transaction.id,
                         status: transaction.status,
+                        ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                         balance: wallet.balance,
                         idempotentReplay: false,
                     };
@@ -190,6 +200,7 @@ export class WageringService {
                     return {
                         transactionId: transaction.id,
                         status: transaction.status,
+                        ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                         balance: wallet.balance,
                         idempotentReplay: false,
                     };
@@ -205,6 +216,7 @@ export class WageringService {
                 return {
                     transactionId: transaction.id,
                     status: transaction.status,
+                    ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                     balance: wallet.balance,
                     idempotentReplay: false,
                 };
@@ -239,6 +251,7 @@ export class WageringService {
                 return {
                     transactionId: transaction.id,
                     status: transaction.status,
+                    ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                     balance: wallet.balance,
                     idempotentReplay: false,
                 };
@@ -254,6 +267,7 @@ export class WageringService {
                 return {
                     transactionId: transaction.id,
                     status: transaction.status,
+                    ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                     balance: wallet.balance,
                     idempotentReplay: false,
                 };
@@ -307,8 +321,73 @@ export class WageringService {
                     throw new ConflictException('Provider transaction ID was already used.');
                 }
             }
+            if (isPermanentInfrastructureFailure(error)) {
+                // A falha ocorreu dentro da UoW e todos os seus efeitos foram revertidos.
+                // O consumidor precisa persistir FAILED em uma UoW nova, junto ao Inbox;
+                // na chamada HTTP fazemos essa gravação aqui, também após o rollback.
+                if (transactionEm) throw new PermanentWageringProcessingError(error);
+                const result = await this.unitOfWork.execute((em) =>
+                    this.recordPermanentFailure(props, em, PERMANENT_INFRASTRUCTURE_FAILURE),
+                );
+                this.metrics.increment('wager_transactions_total{status="FAILED"}');
+                return result;
+            }
             throw error;
         }
+    }
+
+    /** Persiste a falha terminal depois do rollback dos efeitos financeiros tentados. */
+    async recordPermanentFailure(
+        props: ProcessWagerTransactionProps,
+        em: EntityManager,
+        failureCode = PERMANENT_INFRASTRUCTURE_FAILURE,
+    ): Promise<ProcessWagerTransactionResult> {
+        const payloadHash = this.hashPayload(props);
+        const prior = await this.wagerTransactionRepository.findByIdempotencyKey(props.idempotencyKey, em);
+        if (prior) {
+            if (!prior.matchesPayload(payloadHash)) {
+                throw new ConflictException('Idempotency key was already used with a different payload.');
+            }
+            if (prior.isTerminal()) return this.replay(prior, payloadHash, em);
+        } else {
+            const external = await this.wagerTransactionRepository.findByProviderAndExternalId(
+                props.providerId,
+                props.externalTransactionId,
+                em,
+            );
+            if (external) throw new ConflictException('Provider transaction ID was already used.');
+        }
+
+        const wallet = await this.walletRepository.findByIdForUpdate(props.walletId, em);
+        if (!wallet) throw new NotFoundException('Wallet not found.');
+        if (wallet.playerId !== props.playerId) {
+            throw new ConflictException('Wallet does not belong to the provided player.');
+        }
+
+        const transaction = prior ?? WagerTransaction.create({
+            providerId: props.providerId,
+            externalTransactionId: props.externalTransactionId,
+            idempotencyKey: props.idempotencyKey,
+            payloadHash,
+            walletId: props.walletId,
+            playerId: props.playerId,
+            roundId: props.roundId,
+            gameId: props.gameId,
+            kind: props.kind,
+            money: props.money,
+            referenceExternalTransactionId: props.referenceExternalTransactionId,
+        });
+        transaction.fail(failureCode);
+        await this.saveTransaction(transaction, Boolean(prior), wallet.balance, em);
+        await em.flush();
+
+        return {
+            transactionId: transaction.id,
+            status: transaction.status,
+            failureCode: transaction.failureCode,
+            balance: wallet.balance,
+            idempotentReplay: false,
+        };
     }
 
     /** Busca pelo ID interno ou lança NotFoundException quando não há correspondência. */
@@ -372,6 +451,7 @@ export class WageringService {
             return {
                 transactionId: transaction.id,
                 status: transaction.status,
+                ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
                 balance: wallet.balance,
                 idempotentReplay: true,
             };
@@ -379,6 +459,7 @@ export class WageringService {
         return {
             transactionId: transaction.id,
             status: transaction.status,
+            ...(transaction.failureCode ? { failureCode: transaction.failureCode } : {}),
             balance,
             idempotentReplay: true,
         };

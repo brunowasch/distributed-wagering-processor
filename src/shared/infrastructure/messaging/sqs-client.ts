@@ -14,6 +14,12 @@ export interface ReceivedSqsMessage {
     receiveCount: number;
 }
 
+/** Política de redrive opcional usada para ligar uma fila FIFO à sua DLQ. */
+export interface FifoQueueOptions {
+    deadLetterTargetArn?: string;
+    maxReceiveCount?: number;
+}
+
 /** Adaptador HTTP do protocolo SQS Query assinado com AWS Signature Version 4. */
 @Injectable()
 export class SqsClient {
@@ -43,15 +49,40 @@ export class SqsClient {
     }
 
     /** Cria uma fila FIFO sem deduplicação baseada no conteúdo. */
-    async createFifoQueue(queueName: string): Promise<void> {
-        await this.request('', {
-            Action: 'CreateQueue',
-            QueueName: queueName,
+    async createFifoQueue(queueName: string, options: FifoQueueOptions = {}): Promise<void> {
+        const attributes: Record<string, string> = {
             'Attribute.1.Name': 'FifoQueue',
             'Attribute.1.Value': 'true',
             'Attribute.2.Name': 'ContentBasedDeduplication',
             'Attribute.2.Value': 'false',
+        };
+        if (options.deadLetterTargetArn) {
+            const maxReceiveCount = options.maxReceiveCount ?? 5;
+            if (!Number.isInteger(maxReceiveCount) || maxReceiveCount < 1) {
+                throw new RangeError('Maximum receive count must be a positive integer.');
+            }
+            attributes['Attribute.3.Name'] = 'RedrivePolicy';
+            attributes['Attribute.3.Value'] = JSON.stringify({
+                deadLetterTargetArn: options.deadLetterTargetArn,
+                maxReceiveCount: String(maxReceiveCount),
+            });
+        }
+        await this.request('', {
+            Action: 'CreateQueue',
+            QueueName: queueName,
+            ...attributes,
         });
+    }
+
+    /** Lê a ARN retornada pelo broker para configurar uma fila de redrive. */
+    async getQueueArn(queueName: string): Promise<string> {
+        const xml = await this.request(queueName, {
+            Action: 'GetQueueAttributes',
+            'AttributeName.1': 'QueueArn',
+        });
+        const arn = this.attributeValue(xml, 'QueueArn') || this.xmlValue(xml, 'QueueArn');
+        if (!arn) throw new Error('SQS returned an empty queue ARN.');
+        return arn;
     }
 
     /** Exclui a fila pelo nome, normalmente usado apenas por ambientes de teste. */
@@ -66,7 +97,7 @@ export class SqsClient {
             MaxNumberOfMessages: String(maxMessages),
             WaitTimeSeconds: String(waitSeconds),
             VisibilityTimeout: '30',
-            AttributeName: 'ApproximateReceiveCount',
+            'AttributeName.1': 'ApproximateReceiveCount',
         });
         return [...xml.matchAll(/<Message>([\s\S]*?)<\/Message>/g)].map(([, messageXml]) => ({
             messageId: this.xmlValue(messageXml!, 'MessageId'),
@@ -81,14 +112,38 @@ export class SqsClient {
         await this.request(queueName, { Action: 'DeleteMessage', ReceiptHandle: receiptHandle });
     }
 
+    /** Altera a visibilidade para aplicar backoff persistente entre redeliveries. */
+    async changeMessageVisibility(queueName: string, receiptHandle: string, timeoutSeconds: number): Promise<void> {
+        if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 0 || timeoutSeconds > 43_200) {
+            throw new RangeError('Visibility timeout must be an integer between 0 and 43200 seconds.');
+        }
+        await this.request(queueName, {
+            Action: 'ChangeMessageVisibility',
+            ReceiptHandle: receiptHandle,
+            VisibilityTimeout: String(timeoutSeconds),
+        });
+    }
+
     /** Verifica disponibilidade e existência da fila sem propagar falhas do broker. */
     async isReachable(queueName: string): Promise<boolean> {
         try {
-            await this.request(queueName, { Action: 'GetQueueAttributes', AttributeName: 'QueueArn' });
+            await this.request(queueName, { Action: 'GetQueueAttributes', 'AttributeName.1': 'QueueArn' });
             return true;
         } catch {
             return false;
         }
+    }
+
+    /** Consulta a quantidade aproximada de mensagens visíveis em uma fila. */
+    async getApproximateMessageCount(queueName: string): Promise<number> {
+        const xml = await this.request(queueName, {
+            Action: 'GetQueueAttributes',
+            'AttributeName.1': 'ApproximateNumberOfMessages',
+        });
+        const count = Number(this.attributeValue(xml, 'ApproximateNumberOfMessages')
+            || this.xmlValue(xml, 'ApproximateNumberOfMessages'));
+        if (!Number.isInteger(count) || count < 0) throw new Error('SQS returned an invalid approximate message count.');
+        return count;
     }
 
     /** Monta URL local ou AWS para a fila configurada. */

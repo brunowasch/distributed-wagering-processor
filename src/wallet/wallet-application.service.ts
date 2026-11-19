@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { UniqueConstraintViolationException } from '@mikro-orm/core';
 import { createHash } from 'node:crypto';
 import { DatabaseUnitOfWork } from '../shared/infrastructure/database/database-unit-of-work.js';
+import { MetricsService } from '../shared/infrastructure/observability/metrics.service.js';
 import { IntegrationEvent, WalletBalanceChanged, WagerTransactionProcessed } from '../shared/domain/integration-events.js';
 import { Money } from '../shared/domain/money.js';
 import { OutboxRepository } from '../shared/infrastructure/messaging/outbox.repository.js';
@@ -34,6 +35,7 @@ export interface WalletReconciliationResult {
 /** Casos de uso de abertura, consulta e reconciliação da carteira. */
 @Injectable()
 export class WalletApplicationService {
+    private readonly logger = new Logger(WalletApplicationService.name);
     /** Injeta repositórios e a unidade de trabalho usados nos casos de uso da carteira. */
     constructor(
         private readonly wallets: WalletRepository,
@@ -41,6 +43,7 @@ export class WalletApplicationService {
         private readonly transactions: WagerTransactionRepository,
         private readonly outbox: OutboxRepository,
         private readonly unitOfWork: DatabaseUnitOfWork,
+        private readonly metrics: MetricsService,
     ) {}
 
     /** A abertura da wallet, transação OPENING, ledger e eventos formam um commit único. */
@@ -100,7 +103,7 @@ export class WalletApplicationService {
 
     /** Recalcula o saldo pelo ledger e verifica cobertura das transações sem corrigir histórico. */
     async reconcile(walletId: string): Promise<WalletReconciliationResult> {
-        return this.unitOfWork.execute(async (em) => {
+        const result = await this.unitOfWork.execute(async (em) => {
             const wallet = await this.wallets.findByIdForUpdate(walletId, em);
             if (!wallet) throw new NotFoundException('Wallet not found.');
 
@@ -114,11 +117,49 @@ export class WalletApplicationService {
             }
 
             const ledgerTransactionIds = new Set(entries.map(({ transactionId }) => transactionId));
-            const expectedLedgerTransactionIds = new Set(processedTransactions
-                .filter((transaction) => transaction.affectsBalance())
-                .map(({ id }) => id));
-            const ledgerMatchesTransactions = ledgerTransactionIds.size === expectedLedgerTransactionIds.size
+            const processedById = new Map(processedTransactions.map((transaction) => [transaction.id, transaction]));
+            const expectedLedgerTransactions = processedTransactions.filter((transaction) => transaction.affectsBalance());
+            const expectedLedgerTransactionIds = new Set(expectedLedgerTransactions.map(({ id }) => id));
+            const ledgerByTransactionId = new Map(entries.map((entry) => [entry.transactionId, entry]));
+            let ledgerMatchesTransactions = ledgerTransactionIds.size === expectedLedgerTransactionIds.size
                 && [...ledgerTransactionIds].every((id) => expectedLedgerTransactionIds.has(id));
+
+            for (const transaction of expectedLedgerTransactions) {
+                const entry = ledgerByTransactionId.get(transaction.id);
+                let expectedDirection: WalletLedgerDirection | undefined;
+                switch (transaction.kind) {
+                    case WagerTransactionKind.OPENING:
+                    case WagerTransactionKind.WIN:
+                    case WagerTransactionKind.REFUND:
+                        expectedDirection = WalletLedgerDirection.CREDIT;
+                        break;
+                    case WagerTransactionKind.BET:
+                        expectedDirection = WalletLedgerDirection.DEBIT;
+                        break;
+                    case WagerTransactionKind.ROLLBACK: {
+                        const reference = transaction.referenceTransactionId
+                            ? processedById.get(transaction.referenceTransactionId)
+                            : undefined;
+                        expectedDirection = reference?.kind === WagerTransactionKind.BET
+                            ? WalletLedgerDirection.CREDIT
+                            : reference?.kind === WagerTransactionKind.WIN || reference?.kind === WagerTransactionKind.REFUND
+                                ? WalletLedgerDirection.DEBIT
+                                : undefined;
+                        break;
+                    }
+                    case WagerTransactionKind.LOSS:
+                        break;
+                }
+
+                if (!entry
+                    || !expectedDirection
+                    || entry.direction !== expectedDirection
+                    || !entry.money.equals(transaction.money)
+                    || entry.money.getCurrency() !== transaction.money.getCurrency()) {
+                    ledgerMatchesTransactions = false;
+                    break;
+                }
+            }
 
             return {
                 walletId,
@@ -130,6 +171,16 @@ export class WalletApplicationService {
                 checkedTransactions: processedTransactions.length,
             };
         });
+        if (!result.consistent) {
+            this.metrics.increment('wallet_reconciliation_divergences_total');
+            this.logger.error(JSON.stringify({
+                event: 'wallet_reconciliation_divergence',
+                walletId: result.walletId,
+                checkedEntries: result.checkedEntries,
+                checkedTransactions: result.checkedTransactions,
+            }));
+        }
+        return result;
     }
 
     /** Registra um evento de integração na mesma transação SQL da alteração de carteira. */

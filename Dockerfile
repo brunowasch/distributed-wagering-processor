@@ -15,4 +15,4 @@ COPY --from=build /app/scripts ./scripts
 COPY --from=build /app/mikro-orm.config.ts ./mikro-orm.config.ts
 COPY --from=build /app/src ./src
 EXPOSE 3000
-CMD ["sh", "-c", "bun run migration:up && bun run start:prod"]
+CMD ["sh", "-c", "bun run migration:up && exec bun dist/main.js"]

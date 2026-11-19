@@ -37,4 +37,32 @@ describe('SqsClient', () => {
             receiveCount: 2,
         }]);
     });
+
+    it('changes message visibility and reads the queue depth for retry and DLQ monitoring', async () => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response('<ChangeMessageVisibilityResponse/>'))
+            .mockResolvedValueOnce(new Response(`
+                <GetQueueAttributesResponse><GetQueueAttributesResult>
+                  <Attribute><Name>ApproximateNumberOfMessages</Name><Value>3</Value></Attribute>
+                </GetQueueAttributesResult></GetQueueAttributesResponse>
+            `));
+        vi.stubGlobal('fetch', fetchMock);
+        const client = new SqsClient(new ConfigService({
+            AWS_SQS_ENDPOINT: 'http://localhost:4566',
+            AWS_ACCESS_KEY_ID: 'test',
+            AWS_SECRET_ACCESS_KEY: 'test',
+            AWS_ACCOUNT_ID: '000000000000',
+            AWS_REGION: 'us-east-1',
+        }));
+
+        await client.changeMessageVisibility('wager-transactions.fifo', 'receipt-1', 10);
+        expect(await client.getApproximateMessageCount('wager-transactions-dlq.fifo')).toBe(3);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const visibilityRequest = fetchMock.mock.calls[0]![1] as RequestInit;
+        const queueDepthRequest = fetchMock.mock.calls[1]![1] as RequestInit;
+        expect(visibilityRequest.body).toContain('Action=ChangeMessageVisibility');
+        expect(visibilityRequest.body).toContain('VisibilityTimeout=10');
+        expect(queueDepthRequest.body).toContain('Action=GetQueueAttributes');
+    });
 });

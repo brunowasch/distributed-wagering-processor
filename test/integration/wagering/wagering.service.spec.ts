@@ -186,7 +186,9 @@ describe('WageringService (PostgreSQL integration)', () => {
                 transactionId: string;
                 status: WagerTransactionStatus;
             }>((resolve, reject) => {
-                const child = spawn(process.execPath, ['run', 'test/support/process-wager.ts'], {
+                // Este teste precisa iniciar três runtimes Bun independentes. `process.execPath`
+                // aponta para Node quando Vitest é iniciado por Node no Windows.
+                const child = spawn(process.env.BUN_EXECUTABLE ?? 'bun', ['run', 'test/support/process-wager.ts'], {
                     cwd: process.cwd(),
                     env: {
                         ...process.env,
@@ -226,6 +228,9 @@ describe('WageringService (PostgreSQL integration)', () => {
             expect((await wallets.findById(wallet.id, em.fork()))?.balance.toString()).toBe('20.00');
             expect(await em.fork().count(WalletLedgerEntryEntity, { walletId: wallet.id })).toBe(2);
         },
+        // Cada processo inicia Bun, NestJS e um pool PostgreSQL próprio; excede o limite
+        // padrão de 5 s em ambientes Windows mais lentos, embora o processamento esteja correto.
+        20_000,
     );
 
     it('processes different wallets concurrently without sharing their balances', async () => {
