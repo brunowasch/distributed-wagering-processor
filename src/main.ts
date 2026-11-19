@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 
+/** Cria a aplicação Nest e inicia o servidor HTTP na porta configurada. */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 

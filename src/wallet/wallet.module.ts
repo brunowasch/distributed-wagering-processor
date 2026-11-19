@@ -6,10 +6,11 @@ import { WalletLedgerEntryRepository } from './repositories/wallet-ledger-entry.
 import { WalletRepository } from './wallet.repository.js';
 import { WalletService } from './wallet.service.js';
 
+/** Registra entidades, repositórios e serviços do domínio de carteira. */
 @Module({
     // Registra a entidade Wallet no contexto do módulo e no MikroORM.
     imports: [MikroOrmModule.forFeature([WalletEntity, WalletLedgerEntryEntity])],
     providers: [WalletRepository, WalletLedgerEntryRepository, WalletService],
-    exports: [WalletService, WalletLedgerEntryRepository],
+    exports: [WalletService, WalletRepository, WalletLedgerEntryRepository],
 })
 export class WalletModule {}

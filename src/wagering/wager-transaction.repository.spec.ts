@@ -161,6 +161,7 @@ describe('WagerTransactionRepository', () => {
             referenceTransactionId: transaction.referenceTransactionId,
             failureCode: null,
             processedAt: transaction.processedAt,
+            nextReferenceAttemptAt: null,
         });
     });
 });

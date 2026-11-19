@@ -6,8 +6,15 @@ import { ReflectMetadataProvider } from '@mikro-orm/decorators/legacy';
 import { WageringModule } from './wagering/wagering.module.js';
 import { WalletModule } from './wallet/wallet.module.js';
 import { DatabaseModule } from './shared/infrastructure/database/database.module.js';
+import { ApiModule } from './api/api.module.js';
+import { MetricsModule } from './shared/infrastructure/observability/metrics.module.js';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
 
+/** Módulo raiz: carrega configuração, MikroORM e módulos de domínio/apresentação. */
 @Module({
+  controllers: [AppController],
+  providers: [AppService],
   imports: [
     // Carrega .env de forma global
     ConfigModule.forRoot({
@@ -36,6 +43,8 @@ import { DatabaseModule } from './shared/infrastructure/database/database.module
     WageringModule,
     WalletModule,
     DatabaseModule,
+    ApiModule,
+    MetricsModule,
 
   ],
 })

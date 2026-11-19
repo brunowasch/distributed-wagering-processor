@@ -130,6 +130,7 @@ export interface WagerTransactionState {
  * as regras de criação e reconstrução da transação.
  */
 export class WagerTransaction {
+    /** Restringe a construção direta às factories de criação e reidratação do domínio. */
     private constructor(
         public readonly id: string,
         public readonly providerId: string,
@@ -348,8 +349,8 @@ export class WagerTransaction {
     /**
      * Marca a transação como aguardando uma operação de referência.
      *
-     * Essa transição é permitida somente para REFUND e ROLLBACK,
-     * quando a transação original ainda não foi encontrada.
+     * Essa transição é permitida para REFUND e ROLLBACK e para WIN que
+     * informou uma referência opcional ainda não encontrada.
      */
     markPendingReference(): void {
         if (this.isTerminal()) {
@@ -360,7 +361,9 @@ export class WagerTransaction {
             throw new Error('Only PENDING transactions can become PENDING_REFERENCE.');
         }
 
-        if (!this.requiresReference()) {
+        const hasOptionalWinReference = this.kind === WagerTransactionKind.WIN
+            && Boolean(this.referenceExternalTransactionId?.trim());
+        if (!this.requiresReference() && !hasOptionalWinReference) {
             throw new Error('This transaction kind does not require a reference.');
         }
 

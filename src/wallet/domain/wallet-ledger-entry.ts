@@ -50,6 +50,7 @@ export interface WalletLedgerEntryState extends WalletLedgerEntryProps {
  * e o saldo posterior, sem permitir que um débito gere saldo negativo.
  */
 export class WalletLedgerEntry {
+    /** Impede alteração após a criação; use create para validar ou rehydrate para restaurar. */
     private constructor(
         private readonly _id: string,
         private readonly _walletId: string,
@@ -128,34 +129,42 @@ export class WalletLedgerEntry {
         );
     }
 
+    /** Identificador imutável do lançamento. */
     get id(): string {
         return this._id;
     }
 
+    /** Identificador da carteira afetada. */
     get walletId(): string {
         return this._walletId;
     }
 
+    /** Identificador da operação que originou o movimento. */
     get transactionId(): string {
         return this._transactionId;
     }
 
+    /** Direção contábil do lançamento: débito ou crédito. */
     get direction(): WalletLedgerDirection {
         return this._direction;
     }
 
+    /** Valor positivo movimentado, incluindo sua moeda. */
     get money(): Money {
         return this._money;
     }
 
+    /** Saldo da carteira imediatamente antes do lançamento. */
     get balanceBefore(): Money {
         return this._balanceBefore;
     }
 
+    /** Saldo resultante validado pela factory de criação. */
     get balanceAfter(): Money {
         return this._balanceAfter;
     }
 
+    /** Data de criação retornada como cópia para preservar imutabilidade. */
     get createdAt(): Date {
         return new Date(this._createdAt);
     }

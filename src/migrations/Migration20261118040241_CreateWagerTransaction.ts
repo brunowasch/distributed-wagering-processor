@@ -1,9 +1,11 @@
 import { Migration } from '@mikro-orm/migrations';
 
+/** Cria transações financeiras, referências e constraints persistentes de idempotência. */
 export class Migration20261118040241_CreateWagerTransaction extends Migration {
 
     override name = 'Migration20261118040241_CreateWagerTransaction';
 
+    /** Cria tabela, checks, FKs e chaves únicas das transações de aposta. */
     override up(): void {
         this.addSql(`
             create table "wager_transaction" (
@@ -59,6 +61,7 @@ export class Migration20261118040241_CreateWagerTransaction extends Migration {
         `);
     }
 
+    /** Remove a tabela criada por esta migration e suas constraints dependentes. */
     override down(): void {
         this.addSql(`drop table if exists "wager_transaction" cascade;`);
     }

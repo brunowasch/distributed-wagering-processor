@@ -10,7 +10,7 @@ import { WagerTransactionEntity } from '../entities/wager-transaction.entity.js'
  */
 export class WagerTransactionMapper {
 
-    // Converte a transação de domínio para a representação persistida.
+    /** Converte a transação para colunas persistidas, incluindo referência e estado de falha. */
     static toEntity(transaction: WagerTransaction): WagerTransactionEntity {
         return new WagerTransactionEntity({
             id: transaction.id,
@@ -34,7 +34,7 @@ export class WagerTransactionMapper {
         });
     }
 
-    // Reconstrói a transação de domínio a partir da entidade persistida.
+    /** Reidrata o domínio a partir da entidade sem executar transições novamente. */
     static toDomain(entity: WagerTransactionEntity): WagerTransaction {
         return WagerTransaction.rehydrate({
             id: entity.id,

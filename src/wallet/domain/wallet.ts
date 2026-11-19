@@ -41,9 +41,9 @@ export interface WalletState {
     updatedAt: Date;
 }
 
+/** Agregado de carteira: encapsula saldo, moeda e versão alterados em conjunto. */
 export class Wallet {
-    // A carteira só pode ser criada por meio das factories,
-    // garantindo que seu estado inicial respeite as regras do domínio.
+    /** Só permite criar ou restaurar estado por factories que preservam invariantes. */
     private constructor(
         public readonly id: string,
         public readonly playerId: string,
@@ -56,7 +56,7 @@ export class Wallet {
         private _updatedAt: Date,
     ) {}
 
-    // Cria uma nova carteira para um jogador, garantindo que o estado inicial seja válido.
+    /** Abre uma carteira nova; a versão inicial é 1 e o saldo não pode ser negativo. */
     static open(props: WalletProps): Wallet {
         const id = props.id ?? randomUUID();
 
@@ -85,8 +85,7 @@ export class Wallet {
         );
     }
 
-    // Reconstrói uma carteira a partir dos dados recuperados do banco de dados,
-    // sem reaplicar as regras de criação ou transição do domínio.
+    /** Restaura o estado persistido sem reaplicar regras de criação ou transição. */
     static rehydrate(state: WalletState): Wallet {
         return new Wallet(
             state.id,
@@ -99,8 +98,7 @@ export class Wallet {
         );
     }
 
-    // Realiza um crédito garantindo que somente valores positivos
-    // e compatíveis com a moeda da carteira sejam movimentados.
+    /** Credita valor positivo da moeda da carteira e incrementa a versão do saldo. */
     credit(amount: Money): void {
         if (!amount.isPositive()) {
             throw new Error('Credit amount must be positive.');
@@ -111,7 +109,7 @@ export class Wallet {
         this._updatedAt = new Date();
     }
 
-    // Impede que o débito comprometa a invariante de saldo não negativo.
+    /** Debita valor positivo se houver fundos e incrementa a versão do saldo. */
     debit(amount: Money): void {
         if (!amount.isPositive()) {
             throw new Error('Debit amount must be positive.');
@@ -126,19 +124,22 @@ export class Wallet {
         this._updatedAt = new Date();
     }
 
-    // Getters expõem cópias das datas para impedir alterações externas no estado interno.
+    /** Retorna cópia da data de criação para preservar o estado encapsulado. */
     get createdAt(): Date {
         return new Date(this._createdAt.getTime());
     }
 
+    /** Retorna cópia da data da última alteração do saldo. */
     get updatedAt(): Date {
         return new Date(this._updatedAt.getTime());
     }
 
+    /** Saldo atual imutável como Value Object monetário. */
     get balance(): Money {
         return this._balance;
     }
 
+    /** Versão incrementada apenas quando o saldo sofre alteração. */
     get version(): number {
         return this._version;
     }

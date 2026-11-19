@@ -1,9 +1,11 @@
 import { Migration } from '@mikro-orm/migrations';
 
+/** Cria o ledger imutável com FKs, unicidade, índices e checks básicos. */
 export class Migration20261118050115_CreateWalletLedgerEntry extends Migration {
 
     override name = 'Migration20261118050115_CreateWalletLedgerEntry';
 
+    /** Cria a tabela do ledger e aplica restrições de integridade financeira. */
     override up(): void {
         this.addSql(`
             create table "wallet_ledger_entry" (
@@ -80,6 +82,7 @@ export class Migration20261118050115_CreateWalletLedgerEntry extends Migration {
         `);
     }
 
+    /** Remove a tabela do ledger e os objetos dependentes criados nesta migration. */
     override down(): void {
         this.addSql(`
             drop table if exists "wallet_ledger_entry" cascade;

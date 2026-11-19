@@ -11,7 +11,6 @@ import { WalletEntity } from '../../../src/wallet/entities/wallet.entity.js';
 import { WalletLedgerEntryRepository } from '../../../src/wallet/repositories/wallet-ledger-entry.repository.js';
 import { WalletRepository } from '../../../src/wallet/wallet.repository.js';
 import { WagerTransaction, WagerTransactionKind } from '../../../src/wagering/domain/wager-transaction.js';
-import { WagerTransactionEntity } from '../../../src/wagering/entities/wager-transaction.entity.js';
 import { WagerTransactionRepository } from '../../../src/wagering/wager-transaction.repository.js';
 
 describe('WalletLedgerEntryRepository (integration)', () => {
@@ -22,8 +21,6 @@ describe('WalletLedgerEntryRepository (integration)', () => {
     let ledgerRepository: WalletLedgerEntryRepository;
 
     let walletId = '';
-    let transactionId = '';
-    let ledgerEntryId = '';
 
     beforeAll(async () => {
         testingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -34,20 +31,7 @@ describe('WalletLedgerEntryRepository (integration)', () => {
     });
 
     afterEach(async () => {
-        const cleanupEm = em.fork();
-
-        if (ledgerEntryId) {
-            await cleanupEm.nativeDelete(WalletLedgerEntryEntity, { id: ledgerEntryId });
-        }
-        if (transactionId) {
-            await cleanupEm.nativeDelete(WagerTransactionEntity, { id: transactionId });
-        }
-        if (walletId) {
-            await cleanupEm.nativeDelete(WalletEntity, { id: walletId });
-        }
-
-        ledgerEntryId = '';
-        transactionId = '';
+        // Lançamentos são imutáveis no banco; os cenários usam IDs isolados.
         walletId = '';
     });
 
@@ -75,7 +59,6 @@ describe('WalletLedgerEntryRepository (integration)', () => {
             kind: WagerTransactionKind.BET,
             money: Money.from({ amount: '10.00', currency: 'BRL' }),
         });
-        transactionId = transaction.id;
 
         const setupEm = em.fork();
         await walletRepository.create(wallet, setupEm);
@@ -95,7 +78,6 @@ describe('WalletLedgerEntryRepository (integration)', () => {
             balanceBefore: Money.from({ amount: '100.00', currency: 'BRL' }),
             balanceAfter: Money.from({ amount: '90.00', currency: 'BRL' }),
         });
-        ledgerEntryId = entry.id;
         return entry;
     }
 
@@ -186,5 +168,48 @@ describe('WalletLedgerEntryRepository (integration)', () => {
                 await transactionalEm.flush();
             })).rejects.toThrow();
         }
+    });
+
+    it('rejects updates and deletes of an existing ledger entry in PostgreSQL', async () => {
+        const { wallet, transaction } = await createParents();
+        const entry = createDebitEntry(wallet, transaction);
+        const writeEm = em.fork();
+        await ledgerRepository.create(entry, writeEm);
+        await writeEm.flush();
+
+        await expect(em.fork().nativeUpdate(WalletLedgerEntryEntity, { id: entry.id }, { amount: '11.00' }))
+            .rejects.toThrow();
+        await expect(em.fork().nativeDelete(WalletLedgerEntryEntity, { id: entry.id }))
+            .rejects.toThrow();
+
+        const persisted = await em.fork().findOne(WalletLedgerEntryEntity, { id: entry.id });
+        expect(persisted?.amount).toBe('10.00');
+    });
+
+    it('rejects a ledger row whose balance equation is inconsistent', async () => {
+        const { wallet, transaction } = await createParents();
+        const invalidEntity = Object.assign(new WalletLedgerEntryEntity(), {
+            id: randomUUID(),
+            walletId: wallet.id,
+            transactionId: transaction.id,
+            direction: WalletLedgerDirection.DEBIT,
+            amount: '10.00',
+            currency: 'BRL',
+            balanceBefore: '100.00',
+            balanceAfter: '95.00',
+            createdAt: new Date(),
+        });
+
+        await expect(em.fork().transactional(async (transactionalEm) => {
+            transactionalEm.persist(invalidEntity);
+            await transactionalEm.flush();
+        })).rejects.toThrow();
+    });
+
+    it('rejects a negative wallet balance in PostgreSQL', async () => {
+        const { wallet } = await createParents();
+
+        await expect(em.fork().nativeUpdate(WalletEntity, { id: wallet.id }, { balance: '-0.01' }))
+            .rejects.toThrow();
     });
 });

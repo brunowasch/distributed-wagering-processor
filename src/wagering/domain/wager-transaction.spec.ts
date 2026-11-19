@@ -290,6 +290,17 @@ describe('WagerTransaction', () => {
             expect(() => transaction.markPendingReference()).toThrow();
         });
 
+        it('should allow WIN with an optional reference to await that reference', () => {
+            const transaction = WagerTransaction.create(createValidProps({
+                kind: WagerTransactionKind.WIN,
+                referenceExternalTransactionId: 'external-bet-123',
+            }));
+
+            transaction.markPendingReference();
+
+            expect(transaction.status).toBe(WagerTransactionStatus.PENDING_REFERENCE);
+        });
+
         it('should not allow transitioning to PENDING_REFERENCE more than once', () => {
             const transaction = WagerTransaction.create(
                 createValidProps({

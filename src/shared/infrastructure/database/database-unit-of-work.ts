@@ -9,8 +9,10 @@ import { EntityManager } from '@mikro-orm/postgresql';
  * repositórios executem suas operações dentro da mesma unidade
  * de trabalho.
  */
+/** Executa vários repositórios com o mesmo EntityManager e resultado transacional. */
 @Injectable()
 export class DatabaseUnitOfWork {
+    /** Recebe o manager raiz que cria os contextos SQL transacionais. */
     constructor(private readonly em: EntityManager) {}
 
     /**
@@ -19,6 +21,7 @@ export class DatabaseUnitOfWork {
      * O MikroORM confirma a transação quando o callback termina
      * com sucesso e realiza rollback caso ocorra uma exceção.
      */
+    /** Confirma ao concluir com sucesso e propaga a exceção após rollback em caso de falha. */
     async execute<T>(
         work: (em: EntityManager) => Promise<T>,
     ): Promise<T> {

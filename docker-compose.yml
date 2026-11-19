@@ -18,14 +18,51 @@ services:
       retries: 5
 
   localstack:
-    image: localstack/localstack:latest
+    build: ./docker/localstack
+    image: wagering-localstack:latest
     container_name: wagering-localstack
     restart: unless-stopped
     environment:
       SERVICES: sqs
       AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
     ports:
       - "4566:4566"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "curl -fsS http://localhost:4566/_localstack/health | grep -q 'sqs'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    container_name: wagering-processor
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: wagering
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCOUNT_ID: "000000000000"
+      AWS_SQS_ENDPOINT: http://localstack:4566
+      WAGER_TRANSACTIONS_QUEUE: wager-transactions.fifo
+      WAGER_EVENTS_QUEUE: wager-events.fifo
+      OUTBOX_PUBLISHER_ENABLED: "true"
+      SQS_CONSUMER_ENABLED: "true"
+      REFERENCE_WORKER_ENABLED: "true"
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:

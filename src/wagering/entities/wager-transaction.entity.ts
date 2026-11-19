@@ -46,8 +46,13 @@ export interface WagerTransactionEntityProps {
     failureCode?: string | null;
     createdAt?: Date;
     processedAt?: Date | null;
+    resultBalanceAmount?: string | null;
+    resultBalanceCurrency?: string | null;
+    referenceAttempts?: number;
+    nextReferenceAttemptAt?: Date | null;
 }
 
+/** Registro ORM com chaves únicas que sustentam idempotência entre instâncias. */
 @Entity({ tableName: 'wager_transaction' })
 @Unique({ properties: ['idempotencyKey'] })
 @Unique({ properties: ['providerId', 'externalTransactionId'] })
@@ -107,6 +112,20 @@ export class WagerTransactionEntity {
     @Property({ type: 'Date', nullable: true })
     processedAt: Date | null = null;
 
+    /** Snapshot retornado ao provedor para que um replay seja idêntico. */
+    @Property({ type: 'string', columnType: 'numeric(20,2)', nullable: true })
+    resultBalanceAmount: string | null = null;
+
+    @Property({ type: 'string', length: 3, nullable: true })
+    resultBalanceCurrency: string | null = null;
+
+    @Property({ type: 'integer', default: 0 })
+    referenceAttempts = 0;
+
+    @Property({ type: 'timestamptz', nullable: true, fieldName: 'next_reference_attempt_at' })
+    nextReferenceAttemptAt: Date | null = null;
+
+    /** Permite hidratação do ORM ou inicialização explícita por mapper. */
     constructor(props?: WagerTransactionEntityProps) {
         if (props) {
             this.id = props.id;
@@ -127,6 +146,10 @@ export class WagerTransactionEntity {
             this.failureCode = props.failureCode ?? null;
             this.createdAt = props.createdAt ?? new Date();
             this.processedAt = props.processedAt ?? null;
+            this.resultBalanceAmount = props.resultBalanceAmount ?? null;
+            this.resultBalanceCurrency = props.resultBalanceCurrency ?? null;
+            this.referenceAttempts = props.referenceAttempts ?? 0;
+            this.nextReferenceAttemptAt = props.nextReferenceAttemptAt ?? null;
         }
     }
 }

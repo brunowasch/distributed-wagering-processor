@@ -11,6 +11,7 @@ import { Check, Entity, Index, PrimaryKey, Property, Unique } from '@mikro-orm/d
  * a precisão decimal. A consistência matemática dos lançamentos é
  * validada no domínio e complementada por restrições no banco de dados.
  */
+/** Mapeamento persistente do ledger, com restrições de integridade declaradas no schema. */
 @Entity({ tableName: 'wallet_ledger_entry' })
 @Unique({
     name: 'wallet_ledger_entry_wallet_transaction_unique',

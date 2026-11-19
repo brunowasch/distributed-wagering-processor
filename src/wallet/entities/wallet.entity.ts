@@ -20,6 +20,7 @@ export interface WalletEntityProps {
     version: number;
 }
 
+/** Mapeamento MikroORM da carteira; unicidade jogador/moeda é protegida pelo banco. */
 @Entity({ tableName: 'wallet' })
 @Unique({ properties: ['playerId', 'currency'] })
 export class WalletEntity {
@@ -46,6 +47,7 @@ export class WalletEntity {
     @Property({ onCreate: () => new Date(), onUpdate: () => new Date() })
     updatedAt = new Date();
 
+    /** Permite construção vazia pelo ORM ou inicialização a partir de dados mapeados. */
     constructor(props?: WalletEntityProps) {
         if (props) {
             this.id = props.id;

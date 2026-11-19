@@ -5,7 +5,6 @@ import {
     WagerTransactionKind,
     WagerTransactionStatus,
 } from '../domain/wager-transaction.js';
-import { WagerTransactionEntity } from '../entities/wager-transaction.entity.js';
 import { WagerTransactionMapper } from './wager-transaction.mapper.js';
 
 describe('WagerTransactionMapper', () => {
@@ -63,7 +62,6 @@ describe('WagerTransactionMapper', () => {
 
     it('should preserve optional reference and failure properties', () => {
         const transaction = WagerTransaction.create({
-            ...{
                 providerId: 'provider-123',
                 externalTransactionId: 'external-transaction-456',
                 idempotencyKey: 'provider-123:external-transaction-456',
@@ -75,7 +73,6 @@ describe('WagerTransactionMapper', () => {
                 kind: WagerTransactionKind.REFUND,
                 money: Money.from({ amount: '25.50', currency: 'BRL' }),
                 referenceExternalTransactionId: 'external-bet-123',
-            },
         });
 
         transaction.markProcessed('550e8400-e29b-41d4-a716-446655440002');

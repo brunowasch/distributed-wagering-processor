@@ -7,7 +7,7 @@ import { WalletEntity } from '../entities/wallet.entity.js';
  * e a entidade de persistência (WalletEntity).
  */
 export class WalletMapper {
-    // Converte o agregado de domínio para a representação persistida.
+    /** Serializa o agregado para colunas persistidas, mantendo o saldo decimal textual. */
     static toEntity(wallet: Wallet): WalletEntity {
         return new WalletEntity({
             id: wallet.id,
@@ -18,7 +18,7 @@ export class WalletMapper {
         });
     }
 
-    // Reconstrói o agregado de domínio a partir da entidade ORM.
+    /** Reidrata o agregado a partir da entidade ORM sem expor detalhes de persistência. */
     static toDomain(entity: WalletEntity): Wallet {
         return Wallet.rehydrate({
             id: entity.id,

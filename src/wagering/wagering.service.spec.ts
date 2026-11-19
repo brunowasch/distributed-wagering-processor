@@ -17,6 +17,11 @@ describe('WageringService', () => {
 
         service = new WageringService(
             wagerTransactionRepository as unknown as WagerTransactionRepository,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
+            {} as never,
         );
     });
 
